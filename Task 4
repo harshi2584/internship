@@ -1,0 +1,121 @@
+pip install pandas matplotlib folium
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
+import folium
+from folium.plugins import HeatMap
+
+df = pd.read_csv(path)
+print(f" Loaded {df.shape[0]} rows and {df.shape[1]} columns")
+
+datetime_col = next((c for c in df.columns if 'date' in c.lower() or 'time' in c.lower()), None)
+lat_col = next((c for c in df.columns if 'lat' in c.lower()), None)
+lon_col = next((c for c in df.columns if 'lon' in c.lower() or 'lng' in c.lower() or 'long' in c.lower()), None)
+road_col = next((c for c in df.columns if 'road' in c.lower() or 'surface' in c.lower()), None)
+weather_col = next((c for c in df.columns if 'weather' in c.lower()), None)
+cause_col = next((c for c in df.columns if 'cause' in c.lower() or 'factor' in c.lower()), None)
+severity_col = next((c for c in df.columns if 'severity' in c.lower()), None)
+
+print("\nDetected columns:")
+print(" Date/Time:", datetime_col)
+print(" Latitude:", lat_col)
+print(" Longitude:", lon_col)
+print(" Road:", road_col)
+print(" Weather:", weather_col)
+print(" Cause:", cause_col)
+print(" Severity:", severity_col)
+
+if datetime_col:
+    df['_datetime'] = pd.to_datetime(df[datetime_col], errors='coerce', infer_datetime_format=True)
+else:
+    df['_datetime'] = pd.NaT
+
+if df['_datetime'].notna().any():
+    df['hour'] = df['_datetime'].dt.hour
+    df['weekday'] = df['_datetime'].dt.day_name()
+else:
+    print("\n No valid datetime column detected — skipping time-based analysis.")
+    df['hour'] = np.nan
+
+if road_col: print("\nTop 5 Road Types:\n", df[road_col].value_counts().head(5))
+if weather_col: print("\nTop 5 Weather Types:\n", df[weather_col].value_counts().head(5))
+if cause_col: print("\nTop 5 Causes:\n", df[cause_col].value_counts().head(5))
+
+if road_col:
+    plt.figure(figsize=(8,4))
+    df[road_col].fillna('Unknown').value_counts().head(10).plot(kind='bar', color='orange')
+    plt.title("Top Road Surface Types")
+    plt.xlabel("Road Surface")
+    plt.ylabel("Accident Count")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+if weather_col:
+    plt.figure(figsize=(8,4))
+    df[weather_col].fillna('Unknown').value_counts().head(10).plot(kind='bar', color='skyblue')
+    plt.title("Top Weather Conditions")
+    plt.xlabel("Weather")
+    plt.ylabel("Accident Count")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+if cause_col:
+    plt.figure(figsize=(10,4))
+    df[cause_col].fillna('Unknown').value_counts().head(10).plot(kind='bar', color='tomato')
+    plt.title("Top Causes of Accidents")
+    plt.xlabel("Cause")
+    plt.ylabel("Accident Count")
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.show()
+
+if df['_datetime'].notna().any():
+    df['hour'] = df['_datetime'].dt.hour
+    hourly_counts = df['hour'].dropna().astype(int).value_counts().sort_index()
+    if not hourly_counts.empty:
+        plt.figure(figsize=(8,4))
+        hourly_counts.plot(kind='line', marker='o', color='darkblue')
+        plt.title("Accidents by Hour of Day")
+        plt.xlabel("Hour of Day")
+        plt.ylabel("Number of Accidents")
+        plt.grid(True, linestyle='--', alpha=0.6)
+        plt.gca().xaxis.set_major_locator(MaxNLocator(integer=True))
+        plt.tight_layout()
+        plt.show()
+    else:
+        print(" Hour column exists but no valid values found for plotting.")
+else:
+    print(" No valid datetime data found — cannot plot hourly trend.")
+
+if 'hour' in df.columns and df['hour'].notna().sum() > 0:
+    labels = ['Night (0–6)', 'Morning (6–12)', 'Afternoon (12–18)', 'Evening (18–24)']
+    time_bins = pd.cut(df['hour'], bins=[-1,5,11,17,23], labels=labels)
+    plt.figure(figsize=(6,4))
+    time_bins.value_counts().reindex(labels).plot(kind='bar', color='purple')
+    plt.title("Accidents by Time of Day")
+    plt.xlabel("Time of Day")
+    plt.ylabel("Count")
+    plt.tight_layout()
+    plt.show()
+else:
+    print(" Skipping time-of-day plot (no hour data).")
+
+if severity_col:
+    plt.figure(figsize=(6,4))
+    df[severity_col].fillna('Unknown').value_counts().plot(kind='pie', autopct='%1.1f%%', 
+                                                           colors=['#ff9999','#66b3ff','#99ff99'])
+    plt.title("Accident Severity Distribution")
+    plt.ylabel("")
+    plt.show()
+
+if lat_col and lon_col:
+    coords = df[[lat_col, lon_col]].dropna().values.tolist()
+    print(f"\n Creating interactive map with {len(coords)} points...")
+    m = folium.Map(location=[df[lat_col].mean(), df[lon_col].mean()], zoom_start=7)
+    HeatMap(coords, radius=10).add_to(m)
+    display(m)
+else:
+    print("\n No latitude/longitude columns detected — skipping hotspot map.")
