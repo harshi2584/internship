@@ -1,0 +1,74 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import LabelEncoder
+from sklearn.tree import DecisionTreeClassifier, plot_tree
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+import matplotlib.pyplot as plt
+import numpy as np
+
+file_path = path
+
+try:
+    df = pd.read_csv(file_path, sep=';')
+    if len(df.columns) == 1:
+        raise ValueError("Detected only one column — likely wrong separator, retrying with comma.")
+except Exception:
+    df = pd.read_csv(file_path, sep=',')
+
+print(" Dataset loaded successfully!")
+print("Shape:", df.shape)
+print("\nColumns:\n", df.columns.tolist())
+
+df.columns = df.columns.str.strip()
+
+target_col = None
+for possible_target in ['y', 'deposit', 'subscribed', 'purchase']:
+    if possible_target in df.columns:
+        target_col = possible_target
+        break
+
+if target_col is None:
+    raise KeyError(f" Target column not found. Available columns: {df.columns.tolist()}")
+
+print(f"\n Target column detected: '{target_col}'")
+print("\nSample data:\n", df.head())
+
+le = LabelEncoder()
+for column in df.columns:
+    if df[column].dtype == 'object':
+        df[column] = le.fit_transform(df[column])
+
+X = df.drop(target_col, axis=1)
+y = df[target_col]
+
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+model = DecisionTreeClassifier(criterion='entropy', max_depth=5, random_state=42)
+model.fit(X_train, y_train)
+
+y_pred = model.predict(X_test)
+
+print("\n Model Evaluation:")
+print("Accuracy:", round(accuracy_score(y_test, y_pred), 3))
+print("\nClassification Report:\n", classification_report(y_test, y_pred))
+print("\nConfusion Matrix:\n", confusion_matrix(y_test, y_pred))
+
+plt.figure(figsize=(20, 10))
+plot_tree(model, feature_names=X.columns, class_names=['No', 'Yes'], filled=True, fontsize=8)
+plt.title("Decision Tree for Bank Marketing Data")
+plt.show()
+
+feature_importances = pd.DataFrame({
+    'Feature': X.columns,
+    'Importance': model.feature_importances_
+}).sort_values(by='Importance', ascending=False)
+
+print("\n Top 10 Important Features:")
+print(feature_importances.head(10))
+
+plt.figure(figsize=(10, 6))
+plt.barh(feature_importances['Feature'].head(10), feature_importances['Importance'].head(10))
+plt.gca().invert_yaxis()
+plt.xlabel("Importance")
+plt.title("Top 10 Most Important Features")
+plt.show()
